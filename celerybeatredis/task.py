@@ -6,7 +6,7 @@
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
 import datetime
 from copy import deepcopy
-from redis import StrictRedis
+
 import celery
 
 try:
@@ -38,7 +38,8 @@ class Interval(object):
 
 class Crontab(object):
 
-    def __init__(self, minute=0, hour=0, day_of_week=None, day_of_month=None, month_of_year=None):
+    def __init__(self, minute=0, hour=0, day_of_week=None,
+                 day_of_month=None, month_of_year=None):
         self.minute = minute
         self.hour = hour
         self.day_of_week = day_of_week or '*'
@@ -54,6 +55,7 @@ class Crontab(object):
 
 
 class PeriodicTask(object):
+
     """
     Represents a periodic task.
     This follows the celery.beat.ScheduleEntry class design.
@@ -79,9 +81,11 @@ class PeriodicTask(object):
 
     total_run_count = 0
 
-    # Follow celery.beat.SchedulerEntry:__init__() signature as much as possible
-    def __init__(self, name, task, schedule, key=None, enabled=True, args=(), kwargs=None, options=None,
-                 last_run_at=None, last_task_id=None, total_run_count=None, **extrakwargs):
+    # Follow celery.beat.SchedulerEntry:__init__() signature as much as
+    # possible
+    def __init__(
+            self, name, task, schedule, key=None, enabled=True, args=(), kwargs=None, options=None,
+            last_run_at=None, last_task_id=None, total_run_count=None, **extrakwargs):
         """
         :param name: name of the task ( = redis key )
         :param task: taskname ( as in celery : python function name )
@@ -118,7 +122,8 @@ class PeriodicTask(object):
 
         self.running = False
 
-        # storing extra arguments (might be useful to have other args depending on application)
+        # storing extra arguments (might be useful to have other args depending
+        # on application)
         for elem in extrakwargs.keys():
             setattr(self, elem, extrakwargs[elem])
 
@@ -130,13 +135,17 @@ class PeriodicTask(object):
         tasks = rdb.keys(key_prefix + '*')
         for task_key in tasks:
             try:
-                dct = json.loads(bytes_to_str(rdb.get(task_key)), cls=DateTimeDecoder, encoding=default_encoding)
+                dct = json.loads(
+                    bytes_to_str(rdb.get(task_key)),
+                    cls=DateTimeDecoder,
+                    encoding=default_encoding)
                 # task name should always correspond to the key in redis to avoid
                 # issues arising when saving keys - we want to add information to
                 # the current key, not create a new key
                 # logger.warning('json task {0}'.format(dct))
                 yield task_key, dct
-            except json.JSONDecodeError:  # handling bad json format by ignoring the task
+            # handling bad json format by ignoring the task
+            except json.JSONDecodeError:
                 logger.warning('ERROR Reading json task at %s', task_key)
 
     def _next_instance(self, last_run_at):
@@ -152,7 +161,8 @@ class PeriodicTask(object):
     __next__ = next = _next_instance  # for 2to3
 
     def jsondump(self):
-        # must do a deepcopy using our custom iterator to choose what to save (matching external view)
+        # must do a deepcopy using our custom iterator to choose what to save
+        # (matching external view)
         self_dict = deepcopy({k: v for k, v in iter(self) if v is not None})
         return json.dumps(self_dict, cls=DateTimeEncoder)
 
@@ -163,7 +173,8 @@ class PeriodicTask(object):
         Does not update "non-editable" fields (last_run_at, total_run_count).
         Extra arguments will be updated (considered editable)
         """
-        otherdict = other.__dict__  # note : schedule property is not part of the dict.
+        # note : schedule property is not part of the dict.
+        otherdict = other.__dict__
         otherdict.pop('last_run_at')
         otherdict.pop('last_task_id')
         otherdict.pop('total_run_count')
@@ -206,12 +217,17 @@ class PeriodicTask(object):
             for s in [Interval, Crontab]:
                 try:
                     schedule_inst = s(**schedule)
-                except TypeError as typexc:
-                    logger.warn("Create schedule failed. {}".format(schedule.__class__))
+                except TypeError:
                     pass
+                else:
+                    break
+            else:
+                logger.warn(
+                    "Create schedule failed. {}".format(schedule.__class__))
 
             if schedule_inst is None:
-                raise TaskTypeError("Schedule {s} didn't match Crontab or Interval type".format(s=schedule))
+                raise TaskTypeError(
+                    "Schedule {s} didn't match Crontab or Interval type".format(s=schedule))
             else:
                 self.data = schedule_inst
 
